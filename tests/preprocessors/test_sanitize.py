@@ -1,7 +1,13 @@
 """Tests for the HTMLSanitize preprocessor"""
 
+import importlib
+import sys
+from unittest import mock
+
+import bleach
 from nbformat import v4 as nbformat
 
+from nbconvert.preprocessors import sanitize
 from nbconvert.preprocessors.sanitize import SanitizeHTML
 
 from .base import PreprocessorTestsBase
@@ -181,3 +187,30 @@ class TestSanitizer(PreprocessorTestsBase):
             ),
             "_A_ <em>few</em> &lt;script&gt;tags&lt;/script&gt;",
         )
+
+    def test_import_without_css_sanitizer(self):
+        """The module must remain importable when bleach has no CSS sanitization (#2209)."""
+        had_allowed_styles = hasattr(bleach, "ALLOWED_STYLES")
+        saved_allowed_styles = getattr(bleach, "ALLOWED_STYLES", None)
+        try:
+            if had_allowed_styles:
+                del bleach.ALLOWED_STYLES
+            with mock.patch.dict(sys.modules, {"bleach.css_sanitizer": None}):
+                with self.assertWarns(UserWarning):
+                    reloaded = importlib.reload(sanitize)
+
+                self.assertFalse(reloaded._USE_BLEACH_CSS_SANITIZER)
+                self.assertFalse(reloaded._USE_BLEACH_STYLES)
+                self.assertEqual(reloaded.ALLOWED_STYLES, frozenset())
+
+                preprocessor = reloaded.SanitizeHTML()
+                preprocessor.enabled = True
+                self.assertEqual(list(preprocessor.styles), [])
+                self.assertEqual(
+                    preprocessor.sanitize_html_tags("_A_ <script>tags</script>"),
+                    "_A_ &lt;script&gt;tags&lt;/script&gt;",
+                )
+        finally:
+            if had_allowed_styles:
+                bleach.ALLOWED_STYLES = saved_allowed_styles
+            importlib.reload(sanitize)

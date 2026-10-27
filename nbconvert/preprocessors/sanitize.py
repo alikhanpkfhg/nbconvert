@@ -34,9 +34,13 @@ except ImportError:
         )
 
     except ImportError:
+        # Neither the bleach[css] extra (bleach >=5) nor bleach <5 is available:
+        # fall back to allowing no styles at all, so that nbconvert stays importable.
+        ALLOWED_STYLES = frozenset()
+
         warnings.warn(
             "The installed bleach/tinycss2 do not provide CSS sanitization, "
-            "please upgrade to bleach >=5",
+            "please install bleach[css] (bleach >=5 with tinycss2) to enable it",
             UserWarning,
             stacklevel=2,
         )
